@@ -24,6 +24,8 @@ var (
 	newline = []byte{0xDB, 0xDD}
 	// ErrRead 是在读串口发生错误时产生的
 	ErrRead = fmt.Errorf("%s", "Failed to read from serial port")
+	// ErrMsgTooLarge 是当发送的数据超过了114字节时产生
+	ErrMsgTooLarge = fmt.Errorf("%s", "The payload is too large")
 )
 
 // DW1000 是驱动抽象对象
@@ -141,12 +143,16 @@ func (d *DW1000) rawSend(data []byte) error {
 // 例如:
 // d.SendTo([]byte("hello"), dst)
 func (d *DW1000) SendTo(data []byte, dst *Addr) error {
-	buf := make([]byte, 0, 9+len(data))
+	if len(data) > 114 {
+		return ErrMsgTooLarge
+	}
+	buf := make([]byte, 0, 9+len(data)+2)
 	buf = append(buf, 0x45, 0x88, 0x00)
 	buf = append(buf, dst.PANID[:2]...)
 	buf = append(buf, dst.MAC[:2]...)
 	buf = append(buf, 0xff, 0xff) // will be replaced by stm32 firmware
 	buf = append(buf, data...)
+	buf = append(buf, 0x00, 0x00) // FCS Place Holder
 	return d.rawSend(buf)
 }
 
