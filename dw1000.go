@@ -182,6 +182,7 @@ func (d *DW1000) run() {
 				}
 				d.callbackLock.Unlock()
 				time.Sleep(time.Microsecond)
+				return
 			}
 			line = line[:len(line)-1]
 			line = strings.Replace(line, string(db), string([]byte{0xDB}), -1)
@@ -190,10 +191,10 @@ func (d *DW1000) run() {
 			mtype := bline[0]
 			switch mtype {
 			case UsartMsg:
-				a := &Addr{PANID: bline[5:7], MAC: bline[7:9]}
+				a := &Addr{PANID: bline[5:7], MAC: bline[9:11]}
 				d.callbackLock.Lock()
 				if d.callbackset {
-					d.msgCallback(bline[9:], a)
+					d.msgCallback(bline[11:len(bline)-2], a)
 				}
 				d.callbackLock.Unlock()
 			case UsartBeacon:
