@@ -3,6 +3,7 @@ package dw1000
 import (
 	"bufio"
 	"fmt"
+	"log"
 	"strings"
 	"sync"
 	"time"
@@ -147,7 +148,7 @@ func (d *DW1000) SendTo(data []byte, dst *Addr) error {
 		return ErrMsgTooLarge
 	}
 	buf := make([]byte, 0, 9+len(data)+2)
-	buf = append(buf, 0x45, 0x88, 0x00)
+	buf = append(buf, 0x41, 0x88, 0x00)
 	buf = append(buf, dst.PANID[:2]...)
 	buf = append(buf, dst.MAC[:2]...)
 	buf = append(buf, 0xff, 0xff) // will be replaced by stm32 firmware
@@ -205,6 +206,7 @@ func (d *DW1000) run() {
 				}
 				d.callbackLock.Unlock()
 			case UsartLog:
+				log.Printf("%s\n", bline[2:])
 			default:
 			}
 		}
