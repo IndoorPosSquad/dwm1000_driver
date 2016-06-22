@@ -2,6 +2,7 @@ package main
 
 import (
 	"log"
+	"os"
 	"time"
 
 	"github.com/IndoorPosSquad/dwm1000_driver"
@@ -18,11 +19,12 @@ func bc(distance float64, src *dw1000.Addr) {
 func ec(d *dw1000.DW1000, e1 error, e2 error) {
 	log.Printf("Error: %v, %v\n", e1, e2)
 	d.Close()
+	os.Exit(2)
 }
 
 func main() {
 	a := &dw1000.Addr{PANID: []byte{0xCA, 0xDE}, MAC: []byte{0xFF, 0xF1}}
-	dst := &dw1000.Addr{PANID: []byte{0xCA, 0xDE}, MAC: []byte{0xFF, 0xF2}}
+	dst := &dw1000.Addr{PANID: []byte{0xCA, 0xDE}, MAC: []byte{0xFF, 0xF3}}
 	c := &dw1000.Config{Address: a, AutoBeacon: false, SerialPort: "COM4"}
 	d, err := dw1000.OpenDevice(c)
 	if err != nil {
