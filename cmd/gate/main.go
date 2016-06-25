@@ -15,16 +15,34 @@ import (
 )
 
 var (
-	dev  = flag.String("d", "COM1", "COM端口或者TTY串口设备")
-	port = flag.Int("p", 8001, "API的端口")
-	data = new(dataStorage)
-	d    *dw1000.DW1000
+	dev     = flag.String("d", "COM1", "COM端口或者TTY串口设备")
+	httpapi = flag.String("p", "http://127.0.0.1:8889/", "默认api地址")
+	data    = new(dataStorage)
+	d       *dw1000.DW1000
 )
 
-type record struct {
-	q int
-	d string
-	o string
+type Record struct {
+	Quantity int
+	ID       string
+}
+
+func decode(msg []byte, src *dw1000.Addr) {
+	r := new(Record)
+	if err := json.Unmarshal(msg, r); err != nil {
+		log.Println("解析Json出错! ", err)
+		return
+	}
+	log.Printf("货物ID: %s 数量: %d", r.ID, r.Quantity)
+	resp, err := http.Get(fmt.Sprintf("%sdata/%02x/%s/%s?Quantity=%d", *httpapi, src, "inbound", r.ID, r.Quantity))
+	if err != nil {
+		log.Println("发送http请求错误: ", err)
+	}
+	if body, err := ioutil.ReadAll(resp.Body); err != nil {
+		log.Println("读取返回错误: ", err)
+	} else {
+		log.Println(string(body))
+	}
+	resp.Body.Close()
 }
 
 type dataStorage struct {
@@ -65,23 +83,7 @@ func (d *dataStorage) Del(key string) {
 
 func mc(data []byte, src *dw1000.Addr) {
 	log.Printf("Got msg from %02x : %s\n", src, data)
-	obj := new(record)
-	err := json.Unmarshal(data, obj)
-	if err != nil {
-		log.Println("解析JSON出错: ", err)
-		return
-	}
-	url := fmt.Sprintf("http://127.0.0.1:%d/data/%s/%s/%s?Quantity=%d", *port, src, obj.o, obj.d, obj.q)
-	resp, err := http.Get(url)
-	if err != nil {
-		log.Println("发送数据出错: ", err)
-	}
-	defer resp.Body.Close()
-	body, err := ioutil.ReadAll(resp.Body)
-	if err != nil {
-		log.Println("读取返回出错: ", err)
-	}
-	log.Println(body)
+	decode(data, src)
 }
 
 func bc(distance float64, src *dw1000.Addr) {
