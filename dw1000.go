@@ -65,12 +65,13 @@ import (
 )
 
 const (
-	UsartMsg        = 0x00
-	UsartBeacon     = 0x01
-	UsartSetAddr    = 0x02
-	UsartRST        = 0x03
-	UsartAutoBeacon = 0x04
-	UsartLog        = 0x05
+	UsartMsg          = 0x00
+	UsartBeacon       = 0x01
+	UsartSetAddr      = 0x02
+	UsartRST          = 0x03
+	UsartAutoBeacon   = 0x04
+	UsartLog          = 0x05
+	UsartBeaconSilent = 0x06
 )
 
 var (
@@ -109,9 +110,10 @@ func (d *DW1000) write(data []byte) error {
 // 例如:
 // c := &dw1000.Config{Address:addr, AutoBeacon: true, SerialPort: "COM4"}
 type Config struct {
-	Address    *Addr
-	AutoBeacon bool
-	SerialPort string
+	Address      *Addr
+	AutoBeacon   bool
+	SerialPort   string
+	BeaconSilent bool
 }
 
 // Addr 是DW1000使用的地址
@@ -171,6 +173,17 @@ func (d *DW1000) Beacon() error {
 // AutoBeacon 开启DW1000的自动Beacon
 func (d *DW1000) AutoBeacon(enable bool) error {
 	buf := append(make([]byte, 0, 3), UsartAutoBeacon, 1)
+	if enable {
+		buf = append(buf, 1)
+	} else {
+		buf = append(buf, 0)
+	}
+	return d.write(buf)
+}
+
+// BeaconSilent 设置DW1000是否对Beacon测距的包进行响应
+func (d *DW1000) BeaconSilent(enable bool) error {
+	buf := append(make([]byte, 0, 3), UsartBeaconSilent, 1)
 	if enable {
 		buf = append(buf, 1)
 	} else {
@@ -290,6 +303,9 @@ func OpenDevice(c *Config) (d *DW1000, err error) {
 		return nil, err
 	}
 	if err = d.AutoBeacon(c.AutoBeacon); err != nil {
+		return nil, err
+	}
+	if err = d.BeaconSilent(c.BeaconSilent); err != nil {
 		return nil, err
 	}
 	go d.run()
