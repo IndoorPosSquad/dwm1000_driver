@@ -36,6 +36,7 @@ func decode(msg []byte, src *dw1000.Addr) {
 	resp, err := http.Get(fmt.Sprintf("%sdata/%02x/%s/%s?Quantity=%d", *httpapi, src, "inbound", r.ID, r.Quantity))
 	if err != nil {
 		log.Println("发送http请求错误: ", err)
+		return
 	}
 	if body, err := ioutil.ReadAll(resp.Body); err != nil {
 		log.Println("读取返回错误: ", err)
@@ -88,7 +89,10 @@ func mc(data []byte, src *dw1000.Addr) {
 
 func bc(distance float64, src *dw1000.Addr) {
 	log.Printf("Distance to %02x : %3.2f\n", src, distance)
-	key := src.String()
+	if distance > 0.2 {
+		return
+	}
+	key := fmt.Sprintf("%02x", src)
 	if _, ok := data.Get(key); !ok {
 		data.Put(key, "y")
 		time.AfterFunc(time.Minute, func() { data.Del(key) })
@@ -104,6 +108,7 @@ func ec(d *dw1000.DW1000, e1 error, e2 error) {
 
 func main() {
 	var err error
+	flag.Parse()
 	a := &dw1000.Addr{PANID: []byte{0xCA, 0xDE}, MAC: []byte{0xFF, 0xF1}}
 	c := &dw1000.Config{Address: a, AutoBeacon: false, SerialPort: *dev}
 	d, err = dw1000.OpenDevice(c)

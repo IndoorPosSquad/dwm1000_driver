@@ -74,6 +74,14 @@ func run(args ...string) error {
 	return nil
 }
 
+func add(args ...string) error {
+	if len(args) != 2 {
+		return fmt.Errorf("处理参数失败")
+	}
+	handleCode(args[1])
+	return nil
+}
+
 func send(args ...string) error {
 	lock.Lock()
 	defer lock.Unlock()
@@ -182,6 +190,7 @@ func main() {
 		{"send", "发送货物信息", send},
 		{"exit", "exit", exit},
 		{"scan", "scan", startBarcode},
+		{"add", "add", add},
 		{"print", "print", printall},
 	})
 	// utf-8 safe
