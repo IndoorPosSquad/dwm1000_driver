@@ -121,7 +121,7 @@ func errorhandler(e error) error {
 
 var boundStatus = "inbound"
 
-var exitCode = "640522710690"
+var exitCode = "6901236341582"
 
 // statusChange 定义某个条形码是改变进出方向
 var statusChange = "6907992101330"

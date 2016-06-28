@@ -89,10 +89,11 @@ func mc(data []byte, src *dw1000.Addr) {
 
 func bc(distance float64, src *dw1000.Addr) {
 	log.Printf("Distance to %02x : %3.2f\n", src, distance)
-	if distance > 0.2 {
+	key := fmt.Sprintf("%02x", src)
+	if distance > 2.5 {
+		data.Del(key)
 		return
 	}
-	key := fmt.Sprintf("%02x", src)
 	if _, ok := data.Get(key); !ok {
 		data.Put(key, "y")
 		time.AfterFunc(time.Minute, func() { data.Del(key) })
