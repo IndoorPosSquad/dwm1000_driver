@@ -65,13 +65,15 @@ import (
 )
 
 const (
-	UsartMsg          = 0x00
-	UsartBeacon       = 0x01
-	UsartSetAddr      = 0x02
-	UsartRST          = 0x03
-	UsartAutoBeacon   = 0x04
-	UsartLog          = 0x05
-	UsartBeaconSilent = 0x06
+	UsartMsg           = 0x00
+	UsartBeacon        = 0x01
+	UsartSetAddr       = 0x02
+	UsartRST           = 0x03
+	UsartAutoBeacon    = 0x04
+	UsartLog           = 0x05
+	UsartBeaconSilent  = 0x06
+	UsartClkSync       = 0x07
+	UsartTDOATimestamp = 0x08
 )
 
 var (
@@ -83,23 +85,32 @@ var (
 	ErrMsgTooLarge = fmt.Errorf("%s", "The payload is too large")
 )
 
+type MsgCallback func(payload []byte, src *Addr)
+type BeaconCallback func(distance float64, src *Addr)
+type ErrCallback func(d *DW1000, e1, e2 error)
+type SyncCallback func(target *Addr, id byte, T1, T2, T3, T4 uint64, master bool)
+type TDOACallback func(target *Addr, id byte, TS uint64)
+
 // DW1000 是驱动抽象对象
 type DW1000 struct {
 	sync.Mutex
-	serialPort     *serial.Port
-	buffer         *bufio.Reader
-	callbackLock   sync.Mutex
-	callbackset    bool
-	beaconCallback func(distance float64, src *Addr)
-	msgCallback    func(payload []byte, src *Addr)
-	errCallback    func(d *DW1000, e1, e2 error)
-	config         *Config
-	close          chan interface{}
+	serialPort      *serial.Port
+	buffer          *bufio.Reader
+	callbackLock    sync.Mutex
+	callbackset     bool
+	tdoaCallbackset bool
+	beaconCallback  BeaconCallback
+	msgCallback     MsgCallback
+	errCallback     ErrCallback
+	syncCallback    SyncCallback
+	tdoaCallback    TDOACallback
+	config          *Config
+	close           chan interface{}
 }
 
 func (d *DW1000) write(data []byte) error {
 	d.Lock()
-	defer func() { time.AfterFunc(100*time.Millisecond, d.Unlock) }()
+	defer func() { time.AfterFunc(10*time.Millisecond, d.Unlock) }()
 	_, err := d.serialPort.Write(data)
 	return err
 }
@@ -204,6 +215,20 @@ func (d *DW1000) rawSend(data []byte) error {
 	return d.write(buf)
 }
 
+func (d *DW1000) ClcSync(dst *Addr, id byte) error {
+	buf := append(make([]byte, 0, 2+3), UsartClkSync, byte(5), id)
+	buf = append(buf, dst.MAC[:2]...)
+	return d.write(buf)
+}
+
+func (d *DW1000) SetTDOACallback(sc SyncCallback, tc TDOACallback) {
+	d.callbackLock.Lock()
+	d.tdoaCallbackset = true
+	d.syncCallback = sc
+	d.tdoaCallback = tc
+	d.callbackLock.Unlock()
+}
+
 // SendTo 将数据发送到指定地址
 // 这个data就是发送的数据包
 //
@@ -225,7 +250,7 @@ func (d *DW1000) SendTo(data []byte, dst *Addr) error {
 
 // SetCallbacks 设置回调函数
 // 三个回调函数分别处理接收数据、定位Beacon以及错误信息
-func (d *DW1000) SetCallbacks(bc func(distance float64, src *Addr), mc func(payload []byte, src *Addr), ec func(d *DW1000, e1, e2 error)) {
+func (d *DW1000) SetCallbacks(bc BeaconCallback, mc MsgCallback, ec ErrCallback) {
 	d.callbackLock.Lock()
 	d.callbackset = true
 	d.beaconCallback = bc
@@ -274,7 +299,41 @@ func (d *DW1000) run() {
 				d.callbackLock.Unlock()
 			case UsartLog:
 				log.Printf("%s\n", bline[2:])
+			case UsartClkSync:
+				id := bline[6]
+				a := &Addr{PANID: bline[2:4], MAC: bline[4:6]}
+				if len(bline) == 22 {
+					T1 := getUint64(bline[7:], 5)
+					// (uint64(bline[3])) + (uint64(bline[4]) << 8) + (uint64(bline[5]) << 16) + (uint64(bline[6]) << 24) + (uint64(bline[7]) << 32)
+					T2 := getUint64(bline[12:], 5)
+					// (uint64(bline[8])) + (uint64(bline[9]) << 8) + (uint64(bline[10]) << 16) + (uint64(bline[11]) << 24) + (uint64(bline[12]) << 32)
+					T4 := getUint64(bline[17:], 5)
+					// (uint64(bline[13])) + (uint64(bline[14]) << 8) + (uint64(bline[15]) << 16) + (uint64(bline[16]) << 24) + (uint64(bline[17]) << 32)
+					d.callbackLock.Lock()
+					if d.tdoaCallbackset {
+						d.syncCallback(a, id, T1, T2, 0, T4, true)
+					}
+					d.callbackLock.Unlock()
+				} else {
+					T3 := getUint64(bline[7:], 5)
+					// (uint64(bline[3])) + (uint64(bline[4]) << 8) + (uint64(bline[5]) << 16) + (uint64(bline[6]) << 24) + (uint64(bline[7]) << 32)
+					d.callbackLock.Lock()
+					if d.tdoaCallbackset {
+						d.syncCallback(a, id, 0, 0, T3, 0, false)
+					}
+					d.callbackLock.Unlock()
+				}
+			case UsartTDOATimestamp:
+				id := bline[6]
+				a := &Addr{PANID: bline[2:4], MAC: bline[4:6]}
+				ts := getUint64(bline[7:], 5)
+				d.callbackLock.Lock()
+				if d.tdoaCallbackset {
+					d.tdoaCallback(a, id, ts)
+				}
+				d.callbackLock.Unlock()
 			default:
+				log.Printf("Unknown header: %02x\n", mtype)
 			}
 		}
 	}
@@ -310,4 +369,12 @@ func OpenDevice(c *Config) (d *DW1000, err error) {
 	}
 	go d.run()
 	return
+}
+
+func getUint64(buf []byte, len int) uint64 {
+	var num uint64
+	for i := 0; i < len; i++ {
+		num += (uint64(buf[i]) << uint32(8*i))
+	}
+	return num
 }
