@@ -74,6 +74,8 @@ const (
 	UsartBeaconSilent  = 0x06
 	UsartClkSync       = 0x07
 	UsartTDOATimestamp = 0x08
+
+	usartDelay = 2
 )
 
 var (
@@ -110,7 +112,7 @@ type DW1000 struct {
 
 func (d *DW1000) write(data []byte) error {
 	d.Lock()
-	defer func() { time.AfterFunc(10*time.Millisecond, d.Unlock) }()
+	defer func() { time.AfterFunc(usartDelay*time.Millisecond, d.Unlock) }()
 	_, err := d.serialPort.Write(data)
 	return err
 }
@@ -177,7 +179,14 @@ func (d *DW1000) SetAddr(addr *Addr) error {
 
 // Beacon 发射一次Beacon
 func (d *DW1000) Beacon() error {
-	buf := append(make([]byte, 0, 1), 0x01)
+	buf := append(make([]byte, 0, 3), UsartBeacon, 0xFF, 0xFF)
+	return d.write(buf)
+}
+
+// Distance 测量到某个节点的距离
+func (d *DW1000) Distance(addr *Addr) error {
+	buf := append(make([]byte, 0, 3), UsartBeacon)
+	buf = append(buf, addr.MAC[:2]...)
 	return d.write(buf)
 }
 
