@@ -7,6 +7,17 @@ import (
 	"github.com/skelterjohn/go.matrix"
 )
 
+var (
+	A      = &Node{0.0, 0.0, 0.0}
+	B      = &Node{1.2, 0.0, 0.0}
+	C      = &Node{0.0, 1.8, 0.0}
+	D      = &Node{0.0, 1.8, 0.0}
+	OffetA = 0.0
+	OffetB = 0.0
+	OffetC = 0.0
+	OffetD = 0.0
+)
+
 type Node struct {
 	X, Y, Z float64
 }
@@ -25,9 +36,6 @@ func test(A, B, C, D *Node) {
 }
 
 func Solve(p1, p2, p3 float64) *Node {
-	A := &Node{0.0, 0.0, 0.0}
-	B := &Node{1.2, 0.0, 0.0}
-	C := &Node{0.0, 1.8, 0.0}
 	return solve(A, B, C, p1, p2, p3)
 }
 
@@ -40,6 +48,9 @@ func Solve(p1, p2, p3 float64) *Node {
 
 func solve(AnchorA, AnchorB, AnchorC *Node, p1, p2, p3 float64) (result *Node) {
 	// 先计算坐标变换矩阵
+	p1 += OffetA
+	p2 += OffetB
+	p3 += OffetC
 	CordTrans := matrix.Zeros(3, 3)
 	_AB := projdistance(AnchorA, AnchorB)
 	_AC := projdistance(AnchorA, AnchorC)
