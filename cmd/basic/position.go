@@ -3,8 +3,10 @@ package main
 import (
 	"fmt"
 	"math"
+)
 
-	"github.com/skelterjohn/go.matrix"
+var (
+	ErrNoSolution = fmt.Errorf("no solution found")
 )
 
 var (
@@ -19,108 +21,124 @@ var (
 )
 
 type Node struct {
-	X, Y, Z float64
+	X float64
+	Y float64
+	Z float64
 }
 
-func distance(A, B *Node) float64 {
-	return math.Sqrt((B.X-A.X)*(B.X-A.X) + (B.Y-A.Y)*(B.Y-A.Y) + (B.Z-A.Z)*(B.Z-A.Z))
+func square(v float64) float64 {
+	return v * v
 }
 
-func projdistance(A, B *Node) float64 {
-	return math.Sqrt((B.X-A.X)*(B.X-A.X) + (B.Y-A.Y)*(B.Y-A.Y))
+func normalize(p *Node) float64 {
+	return math.Sqrt(square(p.X) + square(p.Y) + square(p.Z))
 }
 
-func test(A, B, C, D *Node) {
-	result := solve(A, B, C, distance(A, D), distance(B, D), distance(C, D))
-	fmt.Printf("正确结果应该是(%3.2f, %3.2f, %3.2f), 结算结果是(%3.2f, %3.2f, %3.2f)\n", D.X, D.Y, D.Z, result.X, result.Y, result.Z)
+func dot(p1, p2 *Node) float64 {
+	return p1.X*p2.X + p1.Y*p2.Y + p1.Z*p2.Z
+}
+
+func subtract(p1, p2 *Node) *Node {
+	return &Node{
+		X: p1.X - p2.X,
+		Y: p1.Y - p2.Y,
+		Z: p1.Z - p2.Z,
+	}
+}
+
+func add(p1, p2 *Node) *Node {
+	return &Node{
+		X: p1.X + p2.X,
+		Y: p1.Y + p2.Y,
+		Z: p1.Z + p2.Z,
+	}
+}
+
+func divide(p *Node, v float64) *Node {
+	return &Node{
+		X: p.X / v,
+		Y: p.Y / v,
+		Z: p.Z / v,
+	}
+}
+
+func multiply(p *Node, v float64) *Node {
+	return &Node{
+		X: p.X * v,
+		Y: p.Y * v,
+		Z: p.Z * v,
+	}
+}
+
+func cross(p1, p2 *Node) *Node {
+	return &Node{
+		X: p1.Y*p2.Z - p1.Z*p2.Y,
+		Y: p1.Z*p2.X - p1.X*p2.Z,
+		Z: p1.X*p2.Y - p1.Y*p2.X,
+	}
 }
 
 func Solve(p1, p2, p3 float64) *Node {
-	return solve(A, B, C, p1, p2, p3)
+	n, err := solve(A, B, C, p1+OffetA, p2+OffetB, p3+OffetC)
+	if err != nil {
+		fmt.Println(err)
+		return nil
+	}
+	return n
 }
 
-// func main() {
-// 	A := &Node{0.0, 0.0, 0.0}
-// 	B := &Node{1.2, 0.0, 0.0}
-// 	C := &Node{0.0, 1.8, 0.0}
-// 	fmt.Println(solve(A, B, C, 2.0, 1.0, 1.0))
-// }
+func solve(p1, p2, p3 *Node, d1, d2, d3 float64) (*Node, error) {
+	ex := divide(subtract(p2, p1), normalize(subtract(p2, p1)))
 
-func solve(AnchorA, AnchorB, AnchorC *Node, p1, p2, p3 float64) (result *Node) {
-	// 先计算坐标变换矩阵
-	p1 += OffetA
-	p2 += OffetB
-	p3 += OffetC
-	CordTrans := matrix.Zeros(3, 3)
-	_AB := projdistance(AnchorA, AnchorB)
-	_AC := projdistance(AnchorA, AnchorC)
-	_BC := projdistance(AnchorB, AnchorC)
-	HB := AnchorB.Z
-	HC := AnchorC.Z
-	AB := distance(AnchorA, AnchorB)
-	AC := distance(AnchorA, AnchorC)
-	BC := distance(AnchorB, AnchorC)
-	_CosA := (_AC*_AC + _AB*_AB - _BC*_BC) / (2 * _AC * _AB)
-	CosA := (AC*AC + AB*AB - BC*BC) / (2 * AC * AB)
-	_dAB := _AC * _CosA
-	dAB := AC * CosA
-	_H := math.Sqrt(_AC*_AC - _dAB*_dAB)
-	H := math.Sqrt(AC*AC - dAB*dAB)
-	// X 轴单位向量
-	CordTrans.Set(0, 0, _AB/AB)
-	CordTrans.Set(0, 2, HB/AB)
-	// Y 轴单位向量
-	CordTrans.Set(1, 0, (_dAB-(_AB*dAB/AB))/H)
-	CordTrans.Set(1, 1, _H/H)
-	CordTrans.Set(1, 2, (HC-(HB*dAB/AB))/H)
-	// Z 轴单位向量
-	CordTrans.Set(2, 0, CordTrans.Get(0, 1)*CordTrans.Get(1, 2)-CordTrans.Get(1, 1)*CordTrans.Get(0, 2))
-	CordTrans.Set(2, 1, CordTrans.Get(1, 0)*CordTrans.Get(0, 2)-CordTrans.Get(0, 0)*CordTrans.Get(1, 2))
-	CordTrans.Set(2, 2, CordTrans.Get(0, 0)*CordTrans.Get(1, 1)-CordTrans.Get(1, 0)*CordTrans.Get(0, 1))
-	temp := math.Sqrt(math.Pow(CordTrans.Get(2, 0), 2) + math.Pow(CordTrans.Get(2, 1), 2) + math.Pow(CordTrans.Get(2, 2), 2))
-	CordTrans.Set(2, 0, CordTrans.Get(2, 0)/temp)
-	CordTrans.Set(2, 1, CordTrans.Get(2, 1)/temp)
-	CordTrans.Set(2, 2, CordTrans.Get(2, 2)/temp)
+	i := dot(ex, subtract(p3, p1))
+	a := subtract(subtract(p3, p1), multiply(ex, i))
+	ey := divide(a, normalize(a))
+	ez := cross(ex, ey)
+	d := normalize(subtract(p2, p1))
+	j := dot(ey, subtract(p3, p1))
 
-	// 开始计算坐标
-	p := (AB + AC + BC) / 2
-	S := math.Sqrt(p * (p - AB) * (p - AC) * (p - BC))
-	alpha := p1
-	bravo := p2
-	charlie := p3
-	delta := BC
-	echo := AC
-	fox := AB
-	Delta := bravo*bravo + charlie*charlie - delta*delta
-	Echo := alpha*alpha + charlie*charlie - echo*echo
-	Fox := alpha*alpha + bravo*bravo - fox*fox
-	V := math.Sqrt(4*alpha*alpha*bravo*bravo*charlie*charlie-alpha*alpha*Delta*Delta-bravo*bravo*Echo*Echo-charlie*charlie*Fox*Fox+Delta*Echo*Fox) / 12
-	Height := V * 3 / S
-	d1 := math.Sqrt(p1*p1 - Height*Height)
-	d2 := math.Sqrt(p2*p2 - Height*Height)
-	d3 := math.Sqrt(p3*p3 - Height*Height)
-	CosAlpha := (d1*d1 + AB*AB - d2*d2) / (2 * d1 * AB)
-	Y := 0.0
-	X := d1 * CosAlpha
-	if (1 - CosAlpha) < 0.000001 {
-		Y = 0.0
-	} else {
-		Y = math.Sqrt(d1*d1 - X*X)
+	x := (square(d1) - square(d2) + square(d)) / (2 * d)
+	y := (square(d1)-square(d3)+square(i)+square(j))/(2*j) - (i/j)*x
+
+	b := square(d1) - square(x) - square(y)
+	if math.Abs(b) < 0.0000000001 {
+		b = 0
+	}
+	z := math.Sqrt(b)
+
+	if math.IsNaN(z) {
+		return nil, ErrNoSolution
 	}
 
-	d4 := math.Pow((dAB-X), 2) + math.Pow((H-Y), 2)
-	d5 := math.Pow((dAB-X), 2) + math.Pow((H+Y), 2)
-	e1 := math.Abs(math.Sqrt(d4) - d3)
-	e2 := math.Abs(math.Sqrt(d5) - d3)
-	if e2 < e1 {
-		Y = -Y
+	a = add(p1, add(multiply(ex, x), multiply(ey, y)))
+	p4a := add(a, multiply(ez, z))
+	// p4b := subtract(a, multiply(ez, z))
+	if z == 0 {
+		return a, nil
 	}
+	return p4a, nil
+}
 
-	XYZ := matrix.Zeros(1, 3)
-	XYZ.Set(0, 0, X)
-	XYZ.Set(0, 1, Y)
-	XYZ.Set(0, 2, Height)
-	POS := matrix.Product(XYZ, CordTrans)
-	result = &Node{X: AnchorA.X + POS.Get(0, 0), Y: AnchorA.Y + POS.Get(0, 1), Z: AnchorA.Z + POS.Get(0, 2)}
-	return
+func distance(p1, p2 *Node) float64 {
+	return normalize(subtract(p1, p2))
+}
+
+func test() {
+
+	p1 := &Node{X: 0.0, Y: 0.0, Z: -10.0}
+	p2 := &Node{X: 40.0, Y: 0.0, Z: 10.0}
+	p3 := &Node{X: 0.0, Y: 30.0, Z: 0.0}
+	p4 := &Node{X: 10.0, Y: 10.0, Z: 100.0}
+	d1 := distance(p1, p4)
+	d2 := distance(p2, p4)
+	d3 := distance(p3, p4)
+	fmt.Println(p1)
+	fmt.Println(p2)
+	fmt.Println(p3)
+	solution, err := solve(p1, p2, p3, d1, d2, d3)
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
+	fmt.Println(solution)
 }
