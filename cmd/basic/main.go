@@ -14,6 +14,8 @@ var PosChan chan *Node
 var d = flag.String("d", "COM4", "Serial port.")
 var data = map[int]float64{}
 
+const delay = 60
+
 func mc(data []byte, src *dw1000.Addr) {
 	log.Printf("Got msg from %02x : %s\n", src, data)
 }
@@ -47,12 +49,14 @@ func main() {
 		time.Sleep(10 * time.Millisecond)
 		if i == 2 {
 			i = -1
-			str := fmt.Sprintf("%d,%d,%d\n", int(data[0xf1]*100), int(data[0xf2]*100), int(data[0xf3]*100))
-			fmt.Println(str)
 			result := Solve(data[0xf1], data[0xf2], data[0xf3])
+			if result == nil {
+				time.Sleep(delay * time.Millisecond)
+				continue
+			}
 			fmt.Printf("解算坐标(%3.2f, %3.2f, %3.2f)\n", result.X, result.Y, result.Z)
 			PosChan <- result
-			time.Sleep(30 * time.Millisecond)
+			time.Sleep(delay * time.Millisecond)
 		}
 	}
 }

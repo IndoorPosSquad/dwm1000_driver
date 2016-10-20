@@ -73,6 +73,7 @@ func echoHandler(ws *websocket.Conn) {
 	for {
 		result := <-PosChan
 		msg := fmt.Sprintf("%3.2f,%3.2f,%3.2f\n", result.X, result.Y, result.Z)
+		fmt.Println("msg:", msg)
 		if _, err := ws.Write([]byte(msg)); err != nil {
 			fmt.Println(err)
 			break
